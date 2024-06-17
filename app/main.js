@@ -4,9 +4,7 @@ const net = require("net");
 console.log("Logs from your program will appear here!");
 
 const server = net.createServer((socket) => {
-    socket.on("data", (data) => {
-        socket.write("HTTP/1.1 200 OK\r\n");
-    });
+    socket.write("HTTP/1.1 200 OK\r\n");
     socket.on("close", () => {
         socket.end();
     });
