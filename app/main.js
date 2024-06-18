@@ -14,7 +14,6 @@ function notFoundResponse() {
 const server = net.createServer((socket) => {
     socket.on("close", () => {
         socket.end();
-        server.close();
     });
     socket.on("data", (data) => {
         const url = data.toString().split(" ")[1];
