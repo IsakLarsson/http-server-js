@@ -6,33 +6,35 @@ console.log("Logs from your program will appear here!");
 
 const flags = process.argv.slice(2);
 
-console.log(flags);
-
-function res() {
-    let response = "HTTP/1.1";
+function HTTPResponse() {
+    let res = "HTTP/1.1";
     return {
         OK: function () {
-            response += " 200 OK\r\n";
+            res += " 200 OK\r\n";
+            return this;
+        },
+        created: function () {
+            res += " 201 Created\r\n";
             return this;
         },
         notFound: function () {
-            response += " 404 Not Found\r\n";
+            res += " 404 Not Found\r\n";
             return this;
         },
         withHeader: function (header) {
-            response += `${header}\r\n`;
+            res += `${header}\r\n`;
             return this;
         },
         withContent: function (content) {
-            response += `Content-Length: ${content.length}\r\n\r\n${content}`;
+            res += `Content-Length: ${content.length}\r\n\r\n${content}`;
             return this;
         },
-        make: () => `${response}\r\n`,
+        make: () => `${res}\r\n`,
     };
 }
 
 function textResponse(content) {
-    return res()
+    return HTTPResponse()
         .OK()
         .withHeader("Content-Type: text/plain")
         .withContent(content)
@@ -40,15 +42,23 @@ function textResponse(content) {
 }
 
 function fileResponse(fileBuffer) {
-    return res()
+    return HTTPResponse()
         .OK()
         .withHeader("Content-Type: application/octet-stream")
         .withContent(fileBuffer)
         .make();
 }
 
+function createdResponse(fileBuffer) {
+    return HTTPResponse()
+        .created()
+        .withHeader("Content-Type: application/octet-stream")
+        .withContent(fileBuffer)
+        .make();
+}
+
 function notFoundResponse() {
-    return res().notFound().make();
+    return HTTPResponse().notFound().make();
 }
 
 function extractDirectory() {
@@ -58,33 +68,63 @@ function extractDirectory() {
     return directory;
 }
 
+function handleGET(url, headers) {
+    if (url === "/") {
+        return HTTPResponse().OK().make();
+    }
+    if (url.includes("/echo/")) {
+        const content = url.split("/echo/")[1];
+        return textResponse(content);
+    }
+    if (url.includes("/user-agent")) {
+        const userAgent = headers
+            .find((header) => header.includes("User-Agent"))
+            .split(": ")[1];
+        return textResponse(userAgent);
+    }
+    if (url.includes("/files")) {
+        const directory = extractDirectory();
+        const fileName = url.split("/files/")[1];
+        const filePath = directory.concat(fileName);
+        if (fs.existsSync(filePath)) {
+            const file = fs.readFileSync(filePath);
+            return fileResponse(file);
+        }
+        return notFoundResponse();
+    }
+    return notFoundResponse();
+}
+
+function handlePOST(url, headers, body) {
+    if (url.includes("/files")) {
+        const directory = extractDirectory();
+        const fileName = url.split("/files/")[1];
+        const filePath = directory.concat(fileName);
+        fs.writeFileSync(filePath, body);
+        return createdResponse(body);
+    }
+    return notFoundResponse();
+}
+
 const server = net.createServer((socket) => {
     socket.on("data", (data) => {
         const request = data.toString();
-        const url = request.split(" ")[1];
-        const headers = request.split("\r\n");
-        console.log(request);
+        const [headerPart, body] = request.split("\r\n\r\n");
+        const [requestline, ...headers] = headerPart.split("\r\n");
+        const [method, url] = requestline.split(" ");
 
-        if (url === "/") {
-            socket.write(res().OK().make());
-        } else if (url.includes("/echo/")) {
-            const content = url.split("/echo/")[1];
-            socket.write(textResponse(content));
-        } else if (url.includes("/user-agent")) {
-            const userAgent = headers[2].split("User-Agent: ")[1];
-            socket.write(textResponse(userAgent));
-        } else if (url.includes("/files")) {
-            const directory = extractDirectory();
-            const fileName = url.split("/files/")[1];
-            const filePath = directory.concat(fileName);
-            if (fs.existsSync(filePath)) {
-                const file = fs.readFileSync(filePath);
-                socket.write(fileResponse(file));
-            } else {
-                socket.write(notFoundResponse());
-            }
-        } else {
-            socket.write(notFoundResponse());
+        console.log(request);
+        switch (method) {
+            case "GET":
+                socket.write(handleGET(url, headers));
+                break;
+
+            case "POST":
+                socket.write(handlePOST(url, headers, body));
+                break;
+
+            default:
+                break;
         }
     });
     socket.on("error", (error) => {
