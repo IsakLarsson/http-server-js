@@ -7,6 +7,10 @@ function textResponse(content) {
     return `HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${content.length}\r\n\r\n${content}`;
 }
 
+function notFoundResponse() {
+    return "HTTP/1.1 404 Not Found\r\n\r\n";
+}
+
 const server = net.createServer((socket) => {
     socket.on("close", () => {
         socket.end();
@@ -23,7 +27,7 @@ const server = net.createServer((socket) => {
             const userAgent = data.toString().split("User-Agent: ")[1].trim();
             socket.write(textResponse(userAgent));
         } else {
-            socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
+            socket.write(notFoundResponse());
         }
     });
 });
