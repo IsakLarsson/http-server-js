@@ -6,6 +6,8 @@ console.log("Logs from your program will appear here!");
 
 const flags = process.argv.slice(2);
 
+const supportedCompressions = new Set(["gzip"]);
+
 function HTTPResponse() {
     let res = "HTTP/1.1";
     return {
@@ -21,8 +23,12 @@ function HTTPResponse() {
             res += " 404 Not Found\r\n";
             return this;
         },
-        withHeader: function (header) {
-            res += `${header}\r\n`;
+        notImplemented: function () {
+            res += " 501 Not Implemented\r\n";
+            return this;
+        },
+        withHeader: function (header, value) {
+            res += `${header}: ${value}\r\n`;
             return this;
         },
         withContent: function (content) {
@@ -36,7 +42,16 @@ function HTTPResponse() {
 function textResponse(content) {
     return HTTPResponse()
         .OK()
-        .withHeader("Content-Type: text/plain")
+        .withHeader("Content-Type", "text/plain")
+        .withContent(content)
+        .make();
+}
+
+function textResponseWithCompression(content, compression) {
+    return HTTPResponse()
+        .OK()
+        .withHeader("Content-Type", "text/plain")
+        .withHeader("Content-Encoding", compression)
         .withContent(content)
         .make();
 }
@@ -44,7 +59,7 @@ function textResponse(content) {
 function fileResponse(fileBuffer) {
     return HTTPResponse()
         .OK()
-        .withHeader("Content-Type: application/octet-stream")
+        .withHeader("Content-Type", "application/octet-stream")
         .withContent(fileBuffer)
         .make();
 }
@@ -52,7 +67,7 @@ function fileResponse(fileBuffer) {
 function createdResponse(fileBuffer) {
     return HTTPResponse()
         .created()
-        .withHeader("Content-Type: application/octet-stream")
+        .withHeader("Content-Type", "application/octet-stream")
         .withContent(fileBuffer)
         .make();
 }
@@ -69,11 +84,19 @@ function extractDirectory() {
 }
 
 function handleGET(url, headers) {
+    let compression = headers.find((header) =>
+        header.includes("Accept-Encoding"),
+    );
+    compression = compression ? compression.split(": ")[1] : null;
+
     if (url === "/") {
         return HTTPResponse().OK().make();
     }
     if (url.includes("/echo/")) {
         const content = url.split("/echo/")[1];
+        if (supportedCompressions.has(compression)) {
+            return textResponseWithCompression(content, compression);
+        }
         return textResponse(content);
     }
     if (url.includes("/user-agent")) {
@@ -124,6 +147,7 @@ const server = net.createServer((socket) => {
                 break;
 
             default:
+                socket.write(HTTPResponse().notImplemented().make());
                 break;
         }
     });
