@@ -84,18 +84,24 @@ function extractDirectory() {
 }
 
 function handleGET(url, headers) {
-    let compression = headers.find((header) =>
+    const compressionHeader = headers.find((header) =>
         header.includes("Accept-Encoding"),
     );
-    compression = compression ? compression.split(": ")[1] : null;
+    const compressions = compressionHeader
+        ? compressionHeader.split(": ").slice(1)[0].split(", ")
+        : [];
+
+    const acceptedCompression = compressions.find((compression) =>
+        supportedCompressions.has(compression),
+    );
 
     if (url === "/") {
         return HTTPResponse().OK().make();
     }
     if (url.includes("/echo/")) {
         const content = url.split("/echo/")[1];
-        if (supportedCompressions.has(compression)) {
-            return textResponseWithCompression(content, compression);
+        if (acceptedCompression) {
+            return textResponseWithCompression(content, acceptedCompression);
         }
         return textResponse(content);
     }
